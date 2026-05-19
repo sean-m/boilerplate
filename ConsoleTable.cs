@@ -29,40 +29,10 @@ namespace SMM {
             DumpTable(items.Cast<object>());
         }
 
-        public void DumpTable(IEnumerable<object> items) {
+        private void _dump(Action<string> action, IEnumerable<object> items) {
             if (Headers.Length == 0 && items.Any()) {
                 InferHeaders(items.First());
             }
-            // Compute column widths based on headers and data
-            Dictionary<string, int> columnWidths = Headers.ToDictionary(h => h, h => h.Length);
-            foreach (var h in Headers) {
-                foreach (var item in items.Take(Math.Min(10, items.Count()))) {
-                    var value = Extensions.FormatProperty(item.GetType().GetProperty(h)?.GetValue(item));
-                    if (value.Length > columnWidths[h]) {
-                        columnWidths[h] =  value.Length;
-                    }
-                }
-            }
-
-            // Print headers
-            string headerLine = string.Join(" | ", Headers.Select(h => h.PadRight(columnWidths[h])));
-            Console.WriteLine(headerLine);
-            Console.WriteLine(new string('-', columnWidths.Values.Sum() + (Headers.Length - 1) * 3)); // Simple separator the length of all columns plus the separators
-            // Print rows
-            foreach (var item in items) {
-                var values = Headers.Select(h => Extensions.FormatProperty(item.GetType().GetProperty(h)?.GetValue(item) ?? String.Empty).PadRight(columnWidths[h]));
-                Console.WriteLine(string.Join(" | ", values));
-            }
-        }
-
-        public string FormatTable(int Width, IEnumerable<object> items) {
-            // Same formatting logic as DumpTable but returns the proposed output as a string instead of printing it directly.
-            // Uses specified width rather than console width.
-            if (Headers.Length == 0 && items.Any()) { Width = 0; }
-            if (Headers.Length == 0 && items.Any()) {
-                InferHeaders(items.First());
-            }
-
             // Compute column widths based on headers and data
             Dictionary<string, int> columnWidths = Headers.ToDictionary(h => h, h => h.Length);
             foreach (var h in Headers) {
@@ -74,16 +44,25 @@ namespace SMM {
                 }
             }
 
-            var sb = new StringBuilder();
             // Print headers
             string headerLine = string.Join(" | ", Headers.Select(h => h.PadRight(columnWidths[h])));
-            sb.AppendLine(headerLine);
-            sb.AppendLine(new string('-', columnWidths.Values.Sum() + (Headers.Length - 1) * 3)); // Simple separator the length of all columns plus the separators
+            action(headerLine);
+            var headerSegments = Headers.Take(1).Select(h => new string('-', columnWidths[h] + 1)).Concat(Headers.Skip(1).Select(h => new string('-', columnWidths[h] + 2)));
+            action(string.Join("+", headerSegments)); // Simple separator the length of all columns plus the separators
             // Print rows
             foreach (var item in items) {
                 var values = Headers.Select(h => Extensions.FormatProperty(item.GetType().GetProperty(h)?.GetValue(item) ?? String.Empty).PadRight(columnWidths[h]));
-                sb.AppendLine(string.Join(" | ", values));
+                action(string.Join(" | ", values));
             }
+        }
+
+        public void DumpTable(IEnumerable<object> items) {
+            _dump(Console.WriteLine, items);
+        }
+
+        public string FormatTable(int Width, IEnumerable<object> items) {
+            var sb = new StringBuilder();
+            _dump((x) => { sb.AppendLine(x); }, items);
             return sb.ToString();
         }
 
